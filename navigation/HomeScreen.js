@@ -25,6 +25,8 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Slider } from '@miblanchard/react-native-slider';
 import FontAwesome from "react-native-vector-icons/FontAwesome";
 import IonIcon from "react-native-vector-icons/Ionicons";
+// import Geolocation from '@react-native-community/geolocation';
+import * as Location from 'expo-location';
 
 const AOBlue = "#080B47";
 let sqFtMin = 1250;
@@ -364,8 +366,9 @@ export class EntryScreen extends React.Component {
       propertiesLoaded: false,
       timer: false,
       textInputValue: "",
-      squareFeet: [0, 5000]
-      // topPos: new Animated.Value(0),
+      squareFeet: [0, 5000],
+      location: "",
+      mlsPropertiesLoaded: false
     };
   }
   setSquareFeet = (input) => {
@@ -434,16 +437,25 @@ export class EntryScreen extends React.Component {
     );
   }
   async fetchData(parameters = "") {
-    let fetchURL = "http://192.168.1.111:4545/properties"
-    if (parameters == "") {
+    let sqlURL = "http://72.182.161.176:4545/properties";
+    let mlsURL = `http://72.182.161.176:4545/mls-properties/${this.state.location}`;
+    if(parameters != ""){
+      sqlURL = sqlURL + "/" + parameters;
+      let response = await fetch(sqlURL);
+      let newData = await response.json();
+      console.log("two");
+      this.setState({ data: newData });
+      return "sql props only";
     }
-    else {
-      fetchURL = fetchURL + "/" + parameters;
+    else{
+      let response = await fetch(sqlURL);
+      let sqlProps = await response.json();
+      response = await fetch(mlsURL);
+      let mlsProps = await response.json();
+      let allProps = sqlProps.concat(mlsProps)
+      this.setState({ data: allProps });
+      return "mls and sql props";
     }
-    let response = await fetch(fetchURL);
-    let newData = await response.json();
-    // console.log(newData);
-    this.setState({ data: newData });
   }
   Entries = (props) => {
     let properties = []
@@ -458,12 +470,16 @@ export class EntryScreen extends React.Component {
         >
           <View style={styles.entrySample}>
             <View style={styles.entryImageContainer}>
-              <Image
+              {this.state.data[i].id < 40
+                ? <Image source={{ uri: `data:image/gif;base64,${this.state.data[i].profile_image}`,}} style={styles.entryImage}/>
+                : <Image source={{ uri: this.state.data[i].profile_image}} style={styles.entryImage}/>
+              }
+              {/* <Image
                 source={{
                   uri: `data:image/gif;base64,${this.state.data[i].profile_image}`,
                 }}
                 style={styles.entryImage}
-              />
+              /> */}
             </View>
             <View style={styles.entryInformation}>
               <View style={styles.entryNameCont}>
@@ -497,13 +513,28 @@ export class EntryScreen extends React.Component {
     setTimeout(() => {
       this.setState({ timer: true });
     }, 1500);
-    this.fetchData()
-      .then(() => {
+    (async () =>{
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status != "granted"){
+        this.setState({location: null})
+      }
+      else{
+        let newLocation = await Location.getCurrentPositionAsync({});
+        newLocation = `${newLocation.coords.latitude},${newLocation.coords.longitude}`
+        console.log(newLocation);
+        this.setState({location: newLocation});
+      }
+    })()
+    .then(() =>{
+        return this.fetchData()
+    })
+    .then((props) => {
+        console.log(this.state.data.length);
         this.Entries();
-      })
-      .catch((error) => {
+    })
+    .catch((error) => {
         console.log(error);
-      });
+    });
   }
   componentDidUpdate(prevProps, prevState) {
     if (prevState.filterActive !== this.state.filterActive) {
@@ -954,7 +985,7 @@ const styles = StyleSheet.create({
     marginLeft: "5%"
   },
   entryImage: {
-    resizeMode: "contain",
+    resizeMode: "cover",
     // borderColor: "blue",
     // borderWidth: 5,
     height: "95%",

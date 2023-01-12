@@ -4,6 +4,7 @@ import MapView from 'react-native-maps';
 import { Marker } from 'react-native-maps';
 import { View, Text, Dimensions, StyleSheet, SafeAreaView } from "react-native";
 import { StatusBar } from 'expo-status-bar';
+import * as Location from 'expo-location';
 
 async function fetchData(url) {
   let fetchURL = url;
@@ -17,8 +18,24 @@ export default function Map() {
   const [location, setLocation] = React.useState([]);
   const [pinLoaded, setPinLoaded] = React.useState(false);
   const [pins, setPins] = React.useState([]);
+  const [latlng, setLatlng] = React.useState("")
   React.useEffect(() => {
-    fetchData("http://192.168.1.111 :4545/locations").then((response) =>{
+    (async () =>{
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status != "granted"){
+        setLatlng("")
+      }
+      else{
+        let newLocation = await Location.getCurrentPositionAsync({});
+        newLocation = `${newLocation.coords.latitude},${newLocation.coords.longitude}`
+        console.log(newLocation);
+        setLatlng(newLocation)
+      }
+    })()
+    .then(() =>{
+      return fetchData("http://72.182.161.176:4545/locations");
+    })
+    .then((response) =>{
       setLocation(response);
       console.log("Response: " + response);
       setPinLoaded(true);
@@ -27,14 +44,22 @@ export default function Map() {
       let tempPins = [];
       for(let i = 0; i < location.length; i++){
         tempPins.push(
-          <MapView.Marker key = {i} coordinate={{
+          <Marker key = {i} coordinate={{
             latitude: location[i][0],
             longitude: location[i][1],
           }}/>
         );
       }
-      setPins(tempPins);
-    });
+      return tempPins;
+    })
+    .then((tempPins) => {
+      if(latlng != ""){
+        return fetchData(`http://72.182.161.176:4545/locations/${latlng}`)
+      }
+      else{
+        return -1
+      }
+    })
   }, [pinLoaded])
   if(pinLoaded){
     return(
